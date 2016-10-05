@@ -2,11 +2,13 @@
   "name": "webcatalog",
   "version": "0.1.0",
   "private": true,
+  "proxy": "http://localhost:5000",
   "devDependencies": {
     "babel-eslint": "^6.1.2",
     "eslint": "^3.6.0",
     "eslint-config-defaults": "^9.0.0",
     "eslint-plugin-react": "^6.3.0",
+    "history": "^4.3.0",
     "react-scripts": "0.6.0",
     "winstrap": "^0.5.10"
   },
@@ -15,8 +17,6 @@
     "express": "^4.14.0",
     "express-session": "^1.14.1",
     "mongodb": "^2.2.10",
-    "passport": "^0.3.2",
-    "passport-azure-ad": "^2.0.3",
     "react": "^15.3.2",
     "react-dom": "^15.3.2"
   },

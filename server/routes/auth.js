@@ -1,164 +1,85 @@
-const
-    express = require('express'), 
-    router = express.Router(),
-    AADBearerStrategy = require('passport-azure-ad').BearerStrategy,
-    ObjectID = require('mongodb').ObjectID;
+const   https = require('https'),
+        express = require('express'), 
+        router = express.Router(),
+        url = require('url'),
+        ObjectID = require('mongodb').ObjectID;
 
 
-module.exports = function (passport, options) {
+module.exports = function (options) {
 
     console.log ('setting up auth routes ');
     var db = options.db;
 
-    // Passport session setup.
-    // To support persistent login sessions, Passport needs to be able to
-    // serialize users into and deserialize users out of the session. Typically,
-    // this will be as simple as storing the user ID when serializing, and
-    // finding the user by ID when deserializing.
-    passport.serializeUser(function (user, done) {
-        console.log ("passport.serializeUser");
-        done(null, user._id);
+// To exlain how to fill in the parmaters for AAD
+    //https://azure.microsoft.com/en-us/documentation/articles/active-directory-protocols-oauth-code/
+// To get your AAD settings, browse to: [DIRECTORY_NAME] = "microsoft" or "khb2b"
+    //  https://login.windows.net/[DIRECTORY_NAME].onmicrosoft.com/.well-known/openid-configuration
+
+    const authorization_endpoint = "https://login.microsoftonline.com/c1563e10-1ee7-4920-94c1-0fd7891c9845/oauth2/authorize",
+          token_endpoint = "https://login.microsoftonline.com/c1563e10-1ee7-4920-94c1-0fd7891c9845/oauth2/token",
+          Application_Id = '43eaeff2-e93a-481b-800e-e9762ab0b209',
+          Application_Key = encodeURIComponent('cCt7HGiggDXLi7E18oXOMzgPFr/1pUycSVCJ3pDCDNw='),
+          Application_Name = encodeURIComponent('http://webcatalog-dev.kh.com'),
+          Callback_Url = 'http://localhost:5000/auth/aad/callback'
+
+  // redirects the user to authorization_endpoint to login the user & get the AAD security token (authorisation code)
+  router.get('/aad',  (req, res) => {
+    res.location(
+      `${authorization_endpoint}`+
+      `?client_id=${Application_Id}`+
+      `&response_type=code`+
+      `&redirect_uri=${encodeURIComponent(Callback_Url)}`+
+      `&response_mode=query`+
+      `&resource=${Application_Name}`+
+      `&state=12345`).status(302).end()
     });
 
-    // from the id, retrieve the user details
-    passport.deserializeUser(function (id, done) {
-        console.log(`-------- passport.deserializeUser : ${id}`);
-        done(null, {_id: id}); 
-/*
-        orm.find(meta.forms.Users , null , {_id: id} , true , false ).then( user => {
-            console.log("-------- passport.deserializeUser : got user");
-            done(null, user);
-        }, err => res.status(400).send(err)).catch (err => res.status(400).send(err));
-*/
-    });
+    router.get('/aad/callback', (req, res) => {
+        let code = req.query['code'],
+            state = req.query['state'],
+            tep = url.parse(token_endpoint),
+            token_req = `redirect_uri=${encodeURIComponent(Callback_Url)}&grant_type=authorization_code&resource=${Application_Name}&client_id=${Application_Id}&client_secret=${Application_Key}&code=${code}`
+        //console.log ('callback with ' + tep.hostname + ' : ' + tep.pathname)
 
-    var gotSocialLoginDetails = function(mappedUserObj, provider, provider_id, done) {
-        return done(null, mappedUserObj);
-    /*
-      orm.find(meta.forms.Users, null, {q: {'provider.provider_id': provider_id}}, true, false).then(function success(existinguser) {
+        // validate the token?
+        // by using a public signing key and issuer information 
 
-          if (!existinguser) {
-              mappedUserObj.provider = [{type: provider, provider_id: provider_id }]
-              console.log(provider + ' strategy: no existing user, creating from social profile : ' + JSON.stringify(mappedUserObj));
-
-              // exps.forms.AuthProviders
-              orm.save (meta.forms.Users, null,null,mappedUserObj).then(function success(newuser) {
-                      console.log (provider + ' saved new user : ' + JSON.stringify(newuser));
-                      done(null, newuser);
-                  }, function error(ee) {
-                      console.log ('create user error: ' + ee);
-                      return done(null, false, 'error creating user');
-                  });
-          } else {
-              console.log(provider + ' found existing user :' + JSON.stringify(existinguser));
-              return done(null, existinguser);
-          }
-      }, function error (e) {
-        console.log(provider + ' strategy find user error:' + JSON.stringify(e));
-        return done(provider + ' strategy find user error:' + JSON.stringify(e));
-       });
-       */
-    }
-
-    passport.use(new AADBearerStrategy({
-            identityMetadata: 'https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/.well-known/openid-configuration', // TenentId
-            clientID: '33cec1bf-65a9-41b2-b63a-7902675bf5f8', // ApplicationId
-            audience: 'http://localhost:3000'
-        },
-        function (accessToken, refreshToken, profile, done) {
-          console.log ('AADBearerStrategy : got profile: ' + JSON.stringify(profile));
-          return gotSocialLoginDetails({
-              name: profile.name.givenName + ' ' + profile.name.familyName,
-              role: "new",
-              email: profile.emails[0].value
-            }, "facebook", profile.id, done);
-        }));
-
-
-    // redirects the user to Facebook login, including the relay
-    router.get('/azuread-openidconnect', function (req, res, next) {
-
-        var startURL = req.query.state  || '/';
-        console.log ('/auth/azuread-openidconnect : ' + startURL);
-        console.log ('user : ' + JSON.stringify(req.user));
-
-        passport.authenticate('azuread-openidconnect', {  state: startURL, scope: 'email' })(req, res, next);
-
-    });
-
-
-    router.get('/azuread-openidconnect/callback',
-/*
-        passport.authenticate('facebook', { successRedirect: '/',
-                failureRedirect: '/login' })
-*/
-        function (req, res, next) {
-
-            console.log ('/auth/azuread-openidconnect/callback, custom callback to handle the state');
-            // supplying a function to 'authenticate' makes this a Custom Callback,
-            // When using a custom callback, it becomes the application's responsibility to establish a session
-            passport.authenticate('azuread-openidconnect', function(err, user, info) {
-
-                if (err) { return next(err); }
-                if (!user) { return res.redirect('/'); }
-
-                // res.send(req.user);
-                console.log('azuread-openidconnect callback: authenticate, err : ' + JSON.stringify(err) + ' user : ' + JSON.stringify(user) + ' info : ' + JSON.stringify(info));
-                req.logIn(user, function(err){
-                    if (err) {
-                        return next(err);
-                    }
-                    console.log ('azuread-openidconnect callback: req.logIn successm now : redirect user to relaystate: ' + req.query.state);
-                    res.redirect(req.query.state || '/');
-                });
-            })(req,res,next);
-        }
-
-    );
-
-    router.post('/ajaxlogin', function (req, res, next) {
-        passport.authenticate('local', function (err, user, info) {
-
-            if (err) {
-                return next(err);
+        let putreq = https.request({
+            hostname: tep.hostname,
+            path: tep.pathname,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Length': Buffer.byteLength(token_req)
             }
-            if (!user) {
-                console.log('local  ajaxlogin : NO user : ' + JSON.stringify(info));
-                return res.json({result: false, message: info});
-            } else {
+            }, (tep_res) => {
+                // Azure AD starts a new session with the user
+                tep_res.on('data', (d1) => {
+                    //console.log (`chunk : ${d1}`)
+                    let auth = JSON.parse(d1),
+                        [part1, part2, part3] = auth.id_token.split('.'),
+                        user = JSON.parse(Buffer.from(part2,'base64'))
 
-                // res.send(req.user);
-                console.log('local  ajaxlogin : user : ' + JSON.stringify(user) + ' info : ' + JSON.stringify(info) + ' state : ' + req.query.state);
+                    console.log (`decode : ${JSON.stringify(auth)} ::: ${JSON.stringify(user)}`)
+                    req.session.user = user
+                    req.session.aadauth = auth
+                    res.location('http://localhost:3000/?login=true').status(302).end()
+                })
 
-                req.logIn(user, function (err) {
-                    if (err) {
-                        return next(err);
-                    }
-                    return res.json({result: true, user: user});
-                });
-            }
-        })(req, res, next);
-    });
-/*
+                tep_res.on('error', (e) =>  res.status(400).send(e));
+                console.log (`status ${tep_res.statusCode}`)
+                if(tep_res.statusCode == 200 || tep_res.statusCode == 201) {
+                
+                } else {
+                  //  res.status(tep_res.statusCode).send(tep_res.statusMessage)
+                }
 
-            { failureFlash: true}),
-        function(req, res) {
-            console.log('ajaxlogin: ' + JSON.stringify(req.user));
-            res.send(req.user);
-        });
-*/
+        }).on('error', (e) =>  res.status(400).send(e));
 
-    router.get('/me',   function(req, res) {
-        console.log('/me: ' + JSON.stringify(req.user));
-        res.send(req.user);
-    });
-
-    router.get('/logout', function (req,res) {
-        console.error('logout called');
-        req.logOut();
-        res.send({ok: 1});
-
-    });
+        putreq.write (token_req)
+        putreq.end()
+        console.log (`written : ${token_req}`)
+    })
 
     return router;
 }

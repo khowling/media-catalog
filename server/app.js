@@ -2,11 +2,11 @@ const
     express = require('express'),
     session    = require('express-session'),
     MongoStore = require('connect-mongo')(session),
-    passport = require ('passport'),
+//    passport = require ('passport'),
     MongoClient = require('mongodb').MongoClient,
-    ObjectID = require('mongodb').ObjectID,
-    cookieParser = require('cookie-parser'),
-    bodyParser = require('body-parser');
+    ObjectID = require('mongodb').ObjectID;
+//    cookieParser = require('cookie-parser'),
+//    bodyParser = require('body-parser');
     
 let mongoPool = { db: null},
     app = express();
@@ -35,12 +35,27 @@ let pdb = new Promise((resolve, reject) => {
     );
 
     // use passport session (allows user to be captured in req.user)
-    app.use(passport.initialize());
-    app.use(passport.session());
+    //app.use(passport.initialize());
+    //app.use(passport.session());
 
     // routes
     // routes are the last thing to be initialised!
-    app.use('/auth', require('./routes/auth')(passport, mongoPool));
+    app.use('/auth', require('./routes/auth')(mongoPool));
+    app.use('/api/ams', require('./routes/ams')(mongoPool));
+    app.get('/api/auth/loadapp',   function(req, res) {
+        console.log('/loadapp: ' + JSON.stringify(req.session.user));
+        res.send(req.session.user ? {auth: true, user: req.session.user} : {auth: false});
+    });
+    app.get('/api/auth/logout', function (req,res) {
+        console.error('logout called');
+        req.session.destroy(function(err) {
+            if(err) {
+                console.log(err);
+            } else {
+                res.send({ok: 1});
+            }
+        })
+    })
 
     /// catch 404 and forward to error handler
     app.use(function (req, res, next) {
@@ -78,7 +93,7 @@ let pdb = new Promise((resolve, reject) => {
 });
 
 
-
+//var urlencodedParser = bodyParser.urlencoded({ extended: false })
 //app.use(bodyParser.json());
 //app.use(bodyParser.urlencoded({extended: true}));
 //app.use(cookieParser());
@@ -88,7 +103,7 @@ app.get('/dbready', (req,res) => {
 })
 
 app.listen(process.env.PORT || 3000);
-console.log("Listening on port 3000");
+console.log(`Listening on port ${process.env.PORT || 3000}`);
 
 
 module.exports = app;
