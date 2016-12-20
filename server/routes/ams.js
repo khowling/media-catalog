@@ -7,18 +7,21 @@ const https = require('https'),
 // https://msdn.microsoft.com/en-us/library/azure/hh973617.aspx
 // 
 const
-    ams_account_name = 'kehowli',
-    ams_account_key = 'huj4dgUqzlffMaufoZec0fuLR6LrP201C7rDdhFpUBI=',
     ams_api_version = '2.13',
-    ams_initial_host = 'media.windows.net'
+    ams_initial_host = 'media.windows.net',
+    aad_acs = 'wamsprodglobal001acs.accesscontrol.windows.net',
+    aad_acs_path = `/v2/OAuth${ams_api_version.replace(/\./g, '-')}`,
+    ams_account_name = 'kehowli',
+    ams_account_key = 'huj4dgUqzlffMaufoZec0fuLR6LrP201C7rDdhFpUBI='
+    
 
 
 // ---------------------------------------------- Create Container ACL
 function ams_authkey () {
     return new Promise ((acc,rej) => {
         let putreq = https.request({
-                hostname: 'wamsprodglobal001acs.accesscontrol.windows.net',
-                path: `/v2/OAuth2-13`,
+                hostname: aad_acs,
+                path: aad_acs_path,
                 method: 'POST',
                 headers: {}
                 }, (res) => {
